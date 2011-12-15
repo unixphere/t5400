@@ -30,6 +30,9 @@
 #include <linux/input-polldev.h>
 #include <linux/interrupt.h>
 #include <linux/workqueue.h>
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
 #include "t5400.h"
 
 /* Max/Min barometric pressure values as stated in spec, unit = hPa */
@@ -127,6 +130,9 @@ struct t5400 {
 	enum t5400_op_mode op_mode;
 	int gpio_irq;
 	int (*gpio_init)(bool activate);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	struct early_suspend early_suspend;
+#endif
 };
 
 static inline int t5400_read_byte(struct t5400_bus *bus, int reg)
@@ -461,6 +467,61 @@ error_irq:
 	return error;
 }
 
+#ifdef CONFIG_PM
+int t5400_disable(struct device *dev)
+{
+	struct t5400 *t5400 = dev_get_drvdata(dev);
+	int error;
+
+	error = t5400_deactivate(t5400);
+	if (error < 0){
+		dev_err(dev, "%s: deactivation failed, %d\n", __func__, error);
+		return error;
+	}
+
+	if (t5400->gpio_init)
+		return t5400->gpio_init(0);
+
+	return 0;
+}
+EXPORT_SYMBOL(t5400_disable);
+
+int t5400_enable(struct device *dev)
+{
+	struct t5400 *t5400 = dev_get_drvdata(dev);
+	int error;
+
+	if (t5400->gpio_init) {
+		error = t5400->gpio_init(1);
+		if (error < 0) {
+			dev_err(dev, "%s: gpio init failed, %d\n",
+					__func__, error);
+			return error;
+		}
+	}
+	return t5400_activate(t5400);
+}
+EXPORT_SYMBOL(t5400_enable);
+#endif
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static void t5400_early_suspend(struct early_suspend *h)
+{
+	struct t5400 *t5400 =
+		container_of(h, struct t5400, early_suspend);
+
+	(void) t5400_disable(t5400->dev);
+}
+
+static void t5400_late_resume(struct early_suspend *h)
+{
+	struct t5400 *t5400 =
+		container_of(h, struct t5400, early_suspend);
+
+	(void) t5400_enable(t5400->dev);
+}
+#endif
+
 int __devinit t5400_probe(struct device *dev, struct t5400_bus *bus)
 {
 	struct t5400 *t5400;
@@ -520,6 +581,12 @@ int __devinit t5400_probe(struct device *dev, struct t5400_bus *bus)
 
 	mutex_init(&t5400->mutex);
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	t5400->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
+	t5400->early_suspend.suspend = t5400_early_suspend;
+	t5400->early_suspend.resume = t5400_late_resume;
+	register_early_suspend(&t5400->early_suspend);
+#endif
 	return 0;
 
 err_free_mem:
@@ -536,48 +603,14 @@ int __devexit t5400_remove(struct device *dev)
 		free_irq(t5400->gpio_irq, t5400);
 	input_unregister_polled_device(t5400->input_polled);
 	input_free_polled_device(t5400->input_polled);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unregister_early_suspend(&t5400->early_suspend);
+#endif
 	kfree(t5400);
 
 	return 0;
 }
 EXPORT_SYMBOL(t5400_remove);
-
-#if defined(CONFIG_PM)
-int t5400_disable(struct device *dev)
-{
-	struct t5400 *t5400 = dev_get_drvdata(dev);
-	int error;
-
-	error = t5400_deactivate(t5400);
-	if (error < 0){
-		dev_err(dev, "%s: deactivation failed, %d\n", __func__, error);
-		return error;
-	}
-
-	if (t5400->gpio_init)
-		return t5400->gpio_init(0);
-
-	return 0;
-}
-EXPORT_SYMBOL(t5400_disable);
-
-int t5400_enable(struct device *dev)
-{
-	struct t5400 *t5400 = dev_get_drvdata(dev);
-	int error;
-
-	if (t5400->gpio_init) {
-		error = t5400->gpio_init(1);
-		if (error < 0) {
-			dev_err(dev, "%s: gpio init failed, %d\n",
-					__func__, error);
-			return error;
-		}
-	}
-	return t5400_activate(t5400);
-}
-EXPORT_SYMBOL(t5400_enable);
-#endif
 
 MODULE_AUTHOR("Stefan Nilsson <stefan.nilsson@unixphere.com>");
 MODULE_DESCRIPTION("T5400 driver");
