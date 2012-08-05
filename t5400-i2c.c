@@ -52,25 +52,15 @@ static const struct t5400_bus_ops t5400_i2c_bus_ops = {
 static int __devinit t5400_i2c_probe(struct i2c_client *client,
 				      const struct i2c_device_id *id)
 {
-	struct t5400_bus *t5400_i2c;
-	int error;
+	struct t5400_bus data_bus = {
+		.bops = &t5400_i2c_bus_ops,
+		.client = client,
+		.id = {
+			.bustype = BUS_I2C,
+		},
+	};
 
-	t5400_i2c = kzalloc(sizeof(struct t5400_bus), GFP_KERNEL);
-	if (!t5400_i2c)
-		return -ENOMEM;
-
-	t5400_i2c->bops = &t5400_i2c_bus_ops;
-	t5400_i2c->client = client;
-	t5400_i2c->id.bustype = BUS_I2C;
-
-	error = t5400_probe(&client->dev, t5400_i2c);
-	if (error < 0) {
-		kfree(t5400_i2c);
-		return error;
-	}
-
-	i2c_set_clientdata(client, t5400_i2c);
-	return 0;
+	return t5400_probe(&client->dev, &data_bus);
 }
 
 static void t5400_i2c_shutdown(struct i2c_client *client)
@@ -80,15 +70,7 @@ static void t5400_i2c_shutdown(struct i2c_client *client)
 
 static int __devexit t5400_i2c_remove(struct i2c_client *client)
 {
-	struct t5400_bus *t5400_i2c = i2c_get_clientdata(client);
-	int error;
-
-	error = t5400_remove(&client->dev);
-	if (error < 0)
-		return error;
-
-	kfree(t5400_i2c);
-	return 0;
+	return t5400_remove(&client->dev);
 }
 
 #if defined(CONFIG_PM)

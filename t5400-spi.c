@@ -65,33 +65,23 @@ static const struct t5400_bus_ops t5400_spi_bus_ops = {
 
 static int __devinit t5400_spi_probe(struct spi_device *client)
 {
-	struct t5400_bus *t5400_spi;
 	int error;
-
-	t5400_spi = kzalloc(sizeof(struct t5400_bus), GFP_KERNEL);
-	if (!t5400_spi)
-		return -ENOMEM;
-
-	t5400_spi->bops = &t5400_spi_bus_ops;
-	t5400_spi->client = client;
-	t5400_spi->id.bustype = BUS_SPI;
+	struct t5400_bus data_bus = {
+		.bops = &t5400_spi_bus_ops,
+		.client = client,
+		.id = {
+			.bustype = BUS_SPI,
+		},
+	};
 
 	client->bits_per_word = 8;
 	error = spi_setup(client);
 	if (error < 0) {
 		dev_err(&client->dev, "%s: spi_setup failed!\n", __func__);
-		kfree(t5400_spi);
 		return error;
 	}
 
-	error = t5400_probe(&client->dev, t5400_spi);
-	if (error < 0) {
-		kfree(t5400_spi);
-		return error;
-	}
-
-	spi_set_drvdata(client, t5400_spi);
-	return 0;
+	return t5400_probe(&client->dev, &data_bus);
 }
 
 static void t5400_spi_shutdown(struct spi_device *client)

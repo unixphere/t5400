@@ -125,7 +125,7 @@ struct t5400 {
 	struct input_dev *input;
 	struct work_struct work;
 	struct mutex mutex;
-	struct t5400_bus *bus;
+	struct t5400_bus bus;
 	struct t5400_data data;
 	enum t5400_op_mode op_mode;
 	int gpio_irq;
@@ -206,7 +206,7 @@ static int t5400_soft_reset(struct t5400_bus *bus)
 static void t5400_worker(struct work_struct *work)
 {
 	struct t5400 *t5400 = container_of(work, struct t5400, work);
-	struct t5400_bus *bus = t5400->bus;
+	struct t5400_bus *bus = &t5400->bus;
 	u16 raw_pres;
 	s16 raw_temp;
 	int error;
@@ -248,7 +248,7 @@ error_exit:
 static irqreturn_t t5400_irq_thread(int irq, void *dev)
 {
 	struct t5400 *t5400 = (struct t5400 *)dev;
-	struct t5400_bus *bus = t5400->bus;
+	struct t5400_bus *bus = &t5400->bus;
 	u16 raw_pres;
 	s16 raw_temp;
 	int error;
@@ -352,7 +352,7 @@ static void t5400_poll(struct input_polled_dev *dev)
 
 static int t5400_activate(struct t5400 *t5400)
 {
-	struct t5400_bus *bus = t5400->bus;
+	struct t5400_bus *bus = &t5400->bus;
 	int error;
 
 	if (t5400->gpio_irq > 0) {
@@ -370,7 +370,7 @@ static int t5400_activate(struct t5400 *t5400)
 
 static int t5400_deactivate(struct t5400 *t5400)
 {
-	struct t5400_bus *bus = t5400->bus;
+	struct t5400_bus *bus = &t5400->bus;
 	int error;
 
 	if (t5400->gpio_irq > 0) {
@@ -427,7 +427,7 @@ static int __devinit t5400_register_polled_device(struct t5400 *t5400)
 	idev = ipoll_dev->input;
 	idev->name = T5400_DRIVER;
 	idev->phys = T5400_DRIVER "/input0";
-	idev->id = t5400->bus->id;
+	idev->id = t5400->bus.id;
 	idev->dev.parent = t5400->dev;
 
 	idev->evbit[0] = BIT_MASK(EV_ABS);
@@ -558,9 +558,9 @@ int __devinit t5400_probe(struct device *dev, struct t5400_bus *bus)
 
 	dev_set_drvdata(dev, t5400);
 	t5400->dev = dev;
-	t5400->bus = bus;
+	t5400->bus = *bus;
 
-	error = t5400_get_calibration_parameters(t5400->bus, &t5400->data.coef);
+	error = t5400_get_calibration_parameters(&t5400->bus, &t5400->data.coef);
 	if (error < 0) {
 		dev_err(dev, "%s: failed to get calib. params, %d\n",
 				__func__, error);
