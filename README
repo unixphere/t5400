@@ -1,0 +1,12 @@
+EPCOS' T5400 pressure sensor
+----------------------------
+
+
+This driver implements support for the T5400 digital pressure sensor from
+EPCOS. The driver is interfaced through the input layer and reports
+ABS_PRESSURE and ABS_MISC events. The ABS_PRESSURE event holds the pressure
+data measured in Pascal. The ABS_MISC event reports the temperature in centi
+Celsius.
+
+The project is hosted at Unixpheres homepage:
+http://www.unixphere.com/projects/t5400.html
